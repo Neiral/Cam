@@ -1,0 +1,565 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#08080a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Capture</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #08080a;
+  --panel: #151518;
+  --line: #303035;
+  --accent: #e55a32;
+  --text: #f5f5f5;
+  --muted: #9b9ba3;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: Inter, system-ui, sans-serif;
+}
+button, input, select { font: inherit; }
+button { cursor: pointer; }
+.app {
+  min-height: 100svh; display: flex; flex-direction: column;
+  max-width: 760px; margin: auto;
+}
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: max(18px, env(safe-area-inset-top)) 20px 16px;
+}
+.brand { font-size: 19px; font-weight: 750; letter-spacing: -.7px; }
+.brand span { color: var(--accent); }
+.sub { color: var(--muted); font-size: 11px; margin-top: 3px; }
+.icon-btn {
+  border: 1px solid var(--line); background: var(--panel); color: white;
+  width: 44px; height: 44px; border-radius: 15px; font-size: 20px;
+}
+.stage {
+  position: relative; flex: 1; min-height: 48svh; max-height: 76svh;
+  margin: 0 10px; overflow: hidden; border-radius: 25px;
+  background: #101013; touch-action: manipulation;
+}
+#video {
+  width: 100%; height: 100%; min-height: 48svh; max-height: 76svh;
+  object-fit: cover; display: block; background: #101013;
+}
+#video.mirror { transform: scaleX(-1); }
+.stage-hint {
+  position: absolute; top: 15px; left: 15px; right: 15px;
+  display: flex; justify-content: space-between; align-items: center;
+  pointer-events: none;
+}
+.pill {
+  background: #08080ac9; border: 1px solid #ffffff20;
+  border-radius: 30px; padding: 8px 11px; font-size: 11px;
+  backdrop-filter: blur(10px);
+}
+#recording { display: none; color: #ff6a5c; }
+#recording::before {
+  content: ""; display: inline-block; width: 7px; height: 7px;
+  background: currentColor; border-radius: 50%; margin-right: 6px;
+}
+.bottom { padding: 20px 20px max(22px, env(safe-area-inset-bottom)); }
+.status {
+  min-height: 20px; text-align: center; color: var(--muted);
+  font-size: 12px; margin-bottom: 20px;
+}
+.controls { display: flex; justify-content: center; align-items: center; gap: 30px; }
+.side-control {
+  width: 52px; height: 52px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--panel);
+  color: white; font-size: 20px;
+}
+.shutter {
+  width: 78px; height: 78px; border-radius: 50%;
+  border: 4px solid #ffffffd9; background: transparent;
+  display: grid; place-items: center; padding: 0;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.shutter-inner {
+  width: 62px; height: 62px; border-radius: 50%;
+  background: var(--accent); transition: all .12s;
+}
+.shutter.recording .shutter-inner {
+  width: 29px; height: 29px; border-radius: 8px; background: #ff4136;
+}
+.note { color: var(--muted); text-align: center; font-size: 11px; margin-top: 19px; }
+button:disabled { opacity: .45; cursor: wait; }
+
+.overlay {
+  position: fixed; inset: 0; z-index: 5; display: none;
+  align-items: center; justify-content: center;
+  padding: 18px; background: #000b; backdrop-filter: blur(12px);
+}
+.overlay.show { display: flex; }
+.modal {
+  width: 100%; max-width: 430px; max-height: 85svh; overflow: auto;
+  padding: 23px; background: #141417; border: 1px solid var(--line);
+  border-radius: 23px;
+}
+.modal h2 { font-size: 20px; margin: 0 0 7px; }
+.description { color: var(--muted); font-size: 12px; line-height: 1.6; margin-bottom: 22px; }
+label { display: block; font-size: 12px; color: #c5c5ca; margin: 15px 0 8px; }
+input, select {
+  width: 100%; padding: 13px; color: white; background: #09090b;
+  border: 1px solid var(--line); border-radius: 12px; outline: none;
+}
+input:focus, select:focus { border-color: var(--accent); }
+.row { display: flex; gap: 9px; margin-top: 12px; }
+.action {
+  border: 0; border-radius: 12px; padding: 13px 15px;
+  font-weight: 700; background: var(--accent); color: white;
+}
+.action.secondary { background: #252529; border: 1px solid var(--line); }
+.action.danger { background: #321c1c; color: #ff8c83; }
+.row .action { flex: 1; }
+.saved-row { display: flex; gap: 8px; margin-top: 12px; }
+.saved-row select { flex: 1; min-width: 0; }
+.small-btn { padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: #252529; color: white; }
+.message {
+  text-align: center; padding: 8px 0 4px;
+}
+.message .symbol { font-size: 42px; margin-bottom: 12px; }
+.message h2 { margin-bottom: 8px; }
+.message p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.hidden { display: none !important; }
+</style>
+</head>
+
+<body>
+<div class="app">
+  <header>
+    <div>
+      <div class="brand">CAP<span>TURE</span></div>
+      <div class="sub">PRIVATE CAMERA · DIRECT UPLOAD</div>
+    </div>
+    <button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙</button>
+  </header>
+
+  <main class="stage" id="stage">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="stage-hint">
+      <span class="pill" id="cameraLabel">CAMERA</span>
+      <span class="pill" id="recording">RECORDING</span>
+    </div>
+  </main>
+
+  <section class="bottom">
+    <div class="status" id="status">Starting camera…</div>
+    <div class="controls">
+      <button class="side-control" id="switchBtn" aria-label="Switch camera">↻</button>
+      <button class="shutter" id="shutter" aria-label="Tap for photo, hold for video">
+        <span class="shutter-inner"></span>
+      </button>
+      <button class="side-control" id="settingsBtn2" aria-label="Webhook settings">☷</button>
+    </div>
+    <div class="note">TAP FOR PHOTO · HOLD FOR VIDEO · DOUBLE-TAP TO SWITCH</div>
+  </section>
+</div>
+
+<div class="overlay" id="settingsOverlay">
+  <div class="modal">
+    <h2>Upload destination</h2>
+    <div class="description">Add a Discord webhook, give it a name, and choose where your captures go.</div>
+
+    <label for="destination">Selected destination</label>
+    <div class="saved-row">
+      <select id="destination"></select>
+      <button class="small-btn" id="deleteBtn" type="button">Delete</button>
+    </div>
+
+    <label for="hookName">New destination name</label>
+    <input id="hookName" placeholder="e.g. Private captures" maxlength="40">
+
+    <label for="hookUrl">Discord webhook URL</label>
+    <input id="hookUrl" placeholder="https://discord.com/api/webhooks/…" inputmode="url" autocomplete="off">
+
+    <div class="row">
+      <button class="action" id="saveHookBtn" type="button">Save destination</button>
+      <button class="action secondary" id="closeSettingsBtn" type="button">Done</button>
+    </div>
+    <div class="description" style="margin:15px 0 0">
+      Webhook URLs grant permission to post to their channel. Keep them private. Captures are not intentionally saved by this app.
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="messageOverlay" role="dialog" aria-modal="true">
+  <div class="modal message">
+    <div class="symbol" id="messageSymbol">✓</div>
+    <h2 id="messageTitle">Uploaded successfully</h2>
+    <p id="messageText">Thank you for using Capture.</p>
+    <button class="action" id="messageOk" style="width:100%;margin-top:12px">Continue</button>
+  </div>
+</div>
+
+<canvas id="canvas" class="hidden"></canvas>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const video = $("video");
+  const shutter = $("shutter");
+  const status = $("status");
+  const recordingBadge = $("recording");
+  const cameraLabel = $("cameraLabel");
+  const settingsOverlay = $("settingsOverlay");
+  const messageOverlay = $("messageOverlay");
+
+  const STORAGE_KEY = "capture_webhooks_v1";
+  const SELECTED_KEY = "capture_selected_webhook_v1";
+
+  let stream = null;
+  let facing = "environment";
+  let recorder = null;
+  let recordedChunks = [];
+  let holdTimer = null;
+  let holdStarted = false;
+  let recording = false;
+  let busy = false;
+  let lastStageTap = 0;
+  let pointerDown = false;
+
+  let hooks = [];
+  try { hooks = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
+  catch { hooks = []; }
+
+  function selectedId() {
+    return localStorage.getItem(SELECTED_KEY) || hooks[0]?.id || "";
+  }
+
+  function selectedHook() {
+    return hooks.find(h => h.id === selectedId()) || null;
+  }
+
+  function saveHooks() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(hooks));
+  }
+
+  function setStatus(text) { status.textContent = text; }
+
+  function showMessage(success, title, text) {
+    $("messageSymbol").textContent = success ? "✓" : "!";
+    $("messageSymbol").style.color = success ? "#77df9a" : "#ff8278";
+    $("messageTitle").textContent = title;
+    $("messageText").textContent = text;
+    messageOverlay.classList.add("show");
+  }
+
+  function renderHooks() {
+    const select = $("destination");
+    select.innerHTML = "";
+    if (!hooks.length) {
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "No destinations saved";
+      select.appendChild(option);
+    } else {
+      hooks.forEach(hook => {
+        const option = document.createElement("option");
+        option.value = hook.id;
+        option.textContent = hook.name;
+        select.appendChild(option);
+      });
+      select.value = selectedId();
+      if (!select.value) select.value = hooks[0].id;
+    }
+    $("deleteBtn").disabled = !hooks.length;
+  }
+
+  async function startCamera() {
+    setStatus("Requesting camera…");
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: {
+          facingMode: { ideal: facing },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
+      });
+      if (stream) stream.getTracks().forEach(track => track.stop());
+      stream = newStream;
+      video.srcObject = stream;
+      video.classList.toggle("mirror", facing === "user");
+      cameraLabel.textContent = facing === "user" ? "FRONT CAMERA" : "REAR CAMERA";
+      await video.play();
+      setStatus("Ready · " + (selectedHook() ? selectedHook().name : "Set a destination"));
+    } catch (error) {
+      console.error(error);
+      setStatus("Camera unavailable");
+      showMessage(false, "Camera unavailable",
+        "Allow camera and microphone access, then reload the page. Use HTTPS in your browser.");
+    }
+  }
+
+  async function switchCamera() {
+    if (busy || recording) return;
+    facing = facing === "environment" ? "user" : "environment";
+    await startCamera();
+  }
+
+  function validHook() {
+    const hook = selectedHook();
+    if (!hook) {
+      showMessage(false, "No destination selected", "Open settings and save a Discord webhook first.");
+      return null;
+    }
+    if (!/^https:\/\/(discord\.com|discordapp\.com)\/api\/webhooks\/\d+\/[\w.-]+/.test(hook.url)) {
+      showMessage(false, "Invalid webhook", "Check the Discord webhook URL in settings.");
+      return null;
+    }
+    return hook;
+  }
+
+  async function uploadBlob(blob, filename) {
+    const hook = validHook();
+    if (!hook) return;
+
+    busy = true;
+    shutter.disabled = true;
+    $("switchBtn").disabled = true;
+    $("settingsBtn").disabled = true;
+    $("settingsBtn2").disabled = true;
+    setStatus("Uploading to " + hook.name + "…");
+
+    try {
+      const data = new FormData();
+      data.append("files[0]", blob, filename);
+      data.append("payload_json", JSON.stringify({ content: "" }));
+
+      const separator = hook.url.includes("?") ? "&" : "?";
+      const response = await fetch(hook.url + separator + "wait=true", {
+        method: "POST",
+        body: data
+      });
+
+      if (!response.ok) {
+        const details = await response.text().catch(() => "");
+        throw new Error("Discord returned HTTP " + response.status +
+          (details ? ". Check the webhook and upload limits." : "."));
+      }
+
+      setStatus("Upload complete");
+      showMessage(true, "Uploaded successfully", "Your capture has been delivered to " +
+        hook.name + ". Thank you for using Capture.");
+    } catch (error) {
+      console.error(error);
+      setStatus("Upload failed");
+      showMessage(false, "Upload failed",
+        "Your capture was not confirmed as uploaded. Keep this page open and try again with a new capture. " +
+        (error instanceof TypeError
+          ? "The browser may have blocked the request (network or CORS restriction)."
+          : error.message));
+    } finally {
+      busy = false;
+      shutter.disabled = false;
+      $("switchBtn").disabled = false;
+      $("settingsBtn").disabled = false;
+      $("settingsBtn2").disabled = false;
+    }
+  }
+
+  function takePhoto() {
+    if (!stream || busy || recording || video.readyState < 2) return;
+    const canvas = $("canvas");
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+    if (!width || !height) return;
+
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (facing === "user") {
+      context.translate(width, 0);
+      context.scale(-1, 1);
+    }
+    context.drawImage(video, 0, 0, width, height);
+    canvas.toBlob(blob => {
+      if (blob) uploadBlob(blob, "capture-" + Date.now() + ".jpg");
+      else showMessage(false, "Photo failed", "Could not create the photo. Please try again.");
+    }, "image/jpeg", 0.92);
+  }
+
+  function startRecording() {
+    if (!stream || busy || recording) return;
+    if (!window.MediaRecorder) {
+      showMessage(false, "Video not supported", "This browser does not support video recording.");
+      return;
+    }
+
+    try {
+      recordedChunks = [];
+      let options = {};
+      if (MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")) {
+        options.mimeType = "video/webm;codecs=vp8,opus";
+      } else if (MediaRecorder.isTypeSupported("video/webm")) {
+        options.mimeType = "video/webm";
+      }
+      recorder = new MediaRecorder(stream, options);
+      recorder.ondataavailable = event => {
+        if (event.data && event.data.size) recordedChunks.push(event.data);
+      };
+      recorder.onerror = event => {
+        console.error(event);
+        recording = false;
+        recordingBadge.style.display = "none";
+        shutter.classList.remove("recording");
+        showMessage(false, "Recording failed", "The browser could not record this video.");
+      };
+      recorder.onstop = () => {
+        const type = recorder.mimeType || "video/webm";
+        const blob = new Blob(recordedChunks, { type });
+        recordedChunks = [];
+        if (blob.size) uploadBlob(blob, "capture-" + Date.now() + ".webm");
+        else showMessage(false, "Empty recording", "No video data was captured.");
+      };
+      recorder.start(500);
+      recording = true;
+      recordingBadge.style.display = "inline-block";
+      shutter.classList.add("recording");
+      setStatus("Recording · release shutter to finish");
+    } catch (error) {
+      console.error(error);
+      showMessage(false, "Recording failed", "Could not start recording. Check microphone permission.");
+    }
+  }
+
+  function stopRecording() {
+    if (recorder && recording && recorder.state !== "inactive") {
+      recording = false;
+      recordingBadge.style.display = "none";
+      shutter.classList.remove("recording");
+      setStatus("Preparing video…");
+      recorder.stop();
+    }
+  }
+
+  shutter.addEventListener("pointerdown", event => {
+    if (busy || !stream) return;
+    event.preventDefault();
+    pointerDown = true;
+    holdStarted = false;
+    try { shutter.setPointerCapture(event.pointerId); } catch {}
+    holdTimer = setTimeout(() => {
+      if (pointerDown) {
+        holdStarted = true;
+        startRecording();
+      }
+    }, 280);
+  });
+
+  function releaseShutter() {
+    if (!pointerDown) return;
+    pointerDown = false;
+    clearTimeout(holdTimer);
+    if (holdStarted) stopRecording();
+    else takePhoto();
+  }
+  shutter.addEventListener("pointerup", releaseShutter);
+  shutter.addEventListener("pointercancel", releaseShutter);
+  shutter.addEventListener("lostpointercapture", () => {
+    if (pointerDown) releaseShutter();
+  });
+  shutter.addEventListener("contextmenu", event => event.preventDefault());
+
+  $("switchBtn").addEventListener("click", switchCamera);
+  $("settingsBtn").addEventListener("click", () => {
+    renderHooks();
+    settingsOverlay.classList.add("show");
+  });
+  $("settingsBtn2").addEventListener("click", () => {
+    renderHooks();
+    settingsOverlay.classList.add("show");
+  });
+  $("closeSettingsBtn").addEventListener("click", () => settingsOverlay.classList.remove("show"));
+  $("messageOk").addEventListener("click", () => messageOverlay.classList.remove("show"));
+
+  $("saveHookBtn").addEventListener("click", () => {
+    const name = $("hookName").value.trim();
+    const url = $("hookUrl").value.trim();
+    if (!name || !url) {
+      showMessage(false, "Missing details", "Enter a destination name and webhook URL.");
+      return;
+    }
+    if (!/^https:\/\/(discord\.com|discordapp\.com)\/api\/webhooks\/\d+\/[\w.-]+/.test(url)) {
+      showMessage(false, "Invalid webhook URL", "Paste the full Discord webhook URL.");
+      return;
+    }
+    const existing = hooks.find(h => h.url === url);
+    if (existing) {
+      existing.name = name;
+      localStorage.setItem(SELECTED_KEY, existing.id);
+    } else {
+      const hook = { id: crypto.randomUUID(), name, url };
+      hooks.push(hook);
+      localStorage.setItem(SELECTED_KEY, hook.id);
+    }
+    saveHooks();
+    $("hookName").value = "";
+    $("hookUrl").value = "";
+    renderHooks();
+    setStatus("Ready · " + name);
+  });
+
+  $("destination").addEventListener("change", event => {
+    localStorage.setItem(SELECTED_KEY, event.target.value);
+    const hook = selectedHook();
+    setStatus(hook ? "Ready · " + hook.name : "Set a destination");
+  });
+
+  $("deleteBtn").addEventListener("click", () => {
+    const id = $("destination").value;
+    const hook = hooks.find(h => h.id === id);
+    if (!hook) return;
+    hooks = hooks.filter(h => h.id !== id);
+    saveHooks();
+    if (selectedId() === id) {
+      if (hooks.length) localStorage.setItem(SELECTED_KEY, hooks[0].id);
+      else localStorage.removeItem(SELECTED_KEY);
+    }
+    renderHooks();
+    const selected = selectedHook();
+    setStatus(selected ? "Ready · " + selected.name : "Set a destination");
+  });
+
+  $("stage").addEventListener("pointerup", event => {
+    if (event.target.closest("button")) return;
+    const now = Date.now();
+    if (now - lastStageTap < 320) {
+      lastStageTap = 0;
+      switchCamera();
+    } else {
+      lastStageTap = now;
+    }
+  });
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    setStatus("Camera requires HTTPS");
+    showMessage(false, "Secure connection required",
+      "Open this app through its HTTPS GitHub Pages address, not a local file.");
+  } else {
+    startCamera();
+  }
+
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(console.error);
+    });
+  }
+
+  renderHooks();
+})();
+</script>
+</body>
+</html>
+ 
